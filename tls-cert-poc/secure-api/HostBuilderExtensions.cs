@@ -21,8 +21,8 @@ namespace secure_api
                     var secretValue = kvClient.GetSecretAsync(vaultSettings.VaultUrl, secretSettings.SslCertName)
                         .GetAwaiter().GetResult().Value;
                     byte[] bytes = System.Convert.FromBase64String(secretValue);
-                    X509Certificate2 x509 = new X509Certificate2(bytes);
-                    listenOptions.UseHttps(x509);
+                    var pfx = new X509Certificate2(bytes, string.Empty, X509KeyStorageFlags.Exportable);
+                    listenOptions.UseHttps(pfx);
                 });
             });
         }
