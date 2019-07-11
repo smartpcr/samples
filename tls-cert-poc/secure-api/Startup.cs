@@ -1,4 +1,6 @@
-﻿using System.Security.Cryptography.X509Certificates;
+﻿using System;
+using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -51,10 +53,17 @@ namespace secure_api
 
                 async Task<string> Callback(string authority, string resource, string scope)
                 {
-                    var authContext = new AuthenticationContext(authority, TokenCache.DefaultShared);
-                    var certificate = new X509Certificate2(vaultSettings.ClientCertFile);
+                    var authContext = new AuthenticationContext(authority);
+                    var clientCertFile = Path.Combine(
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".secrets"),
+                        vaultSettings.ClientCertFile);
+                    var certificate = new X509Certificate2(clientCertFile);
                     var clientCred = new ClientAssertionCertificate(vaultSettings.ClientId, certificate);
                     var result = await authContext.AcquireTokenAsync(resource, clientCred);
+
+                    if (result == null)
+                        throw new InvalidOperationException("Failed to obtain the JWT token");
+
                     return result.AccessToken;
                 }
 
