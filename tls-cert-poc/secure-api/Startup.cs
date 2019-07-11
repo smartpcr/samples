@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.KeyVault;
 using Microsoft.Azure.Services.AppAuthentication;
@@ -19,26 +15,30 @@ namespace secure_api
 {
     public class Startup
     {
-        private readonly ILogger<Startup> _logger;
-        private readonly ILoggerFactory _loggerFactory;
+        private readonly ILogger<Startup> logger;
+        private readonly ILoggerFactory loggerFactory;
         public IConfiguration Configuration { get; private set; }
         public IHostingEnvironment Env { get; }
 
         public Startup(IHostingEnvironment env, ILoggerFactory loggerFactory, IConfiguration configuration)
         {
             Env = env;
-            _loggerFactory = loggerFactory;
-            _logger = loggerFactory.CreateLogger<Startup>();
+            this.loggerFactory = loggerFactory;
+            logger = loggerFactory.CreateLogger<Startup>();
 
             Configuration = configuration;
         }
 
         public void ConfigureServices(IServiceCollection services)
         {
-            services.Configure<VaultSetting>(Configuration.GetSection("Vault"));
+            services.AddOptions();
+            services.Configure<VaultSettings>(Configuration.GetSection(nameof(VaultSettings)));
+            services.Configure<SecretSettings>(Configuration.GetSection(nameof(SecretSettings)));
+
             IKeyVaultClient keyVaultClient;
             if (Env.IsProduction())
             {
+                logger.LogInformation("Use MSI to access key vault...");
                 var azureServiceTokenProvider = new AzureServiceTokenProvider();
                 keyVaultClient = new KeyVaultClient(
                     new KeyVaultClient.AuthenticationCallback(
@@ -46,18 +46,19 @@ namespace secure_api
             }
             else
             {
-                var vaultSetting = new VaultSetting();
-                Configuration.Bind("Vault", vaultSetting);
+                logger.LogInformation("Use service principal with cert to access key vault...");
+                var vaultSettings = services.BuildServiceProvider().GetService<IOptions<VaultSettings>>().Value;
 
-                KeyVaultClient.AuthenticationCallback callback = async (authority, resource, scope) =>
+                async Task<string> Callback(string authority, string resource, string scope)
                 {
                     var authContext = new AuthenticationContext(authority, TokenCache.DefaultShared);
-                    var certificate = new X509Certificate2(vaultSetting.CertFile);
-                    var clientCred = new ClientAssertionCertificate(vaultSetting.ClientId, certificate);
+                    var certificate = new X509Certificate2(vaultSettings.ClientCertFile);
+                    var clientCred = new ClientAssertionCertificate(vaultSettings.ClientId, certificate);
                     var result = await authContext.AcquireTokenAsync(resource, clientCred);
                     return result.AccessToken;
-                };
-                keyVaultClient = new KeyVaultClient(callback);
+                }
+
+                keyVaultClient = new KeyVaultClient(Callback);
             }
             services.AddSingleton(keyVaultClient);
 
