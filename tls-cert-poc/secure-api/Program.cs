@@ -20,6 +20,6 @@ namespace secure_api
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
                 .UseStartup<Startup>()
-                .UseKestrel(6003);
+                .UseKestrel(7201);
     }
 }

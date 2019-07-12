@@ -3,6 +3,7 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.KeyVault;
@@ -36,6 +37,8 @@ namespace secure_api
             services.AddOptions();
             services.Configure<VaultSettings>(Configuration.GetSection(nameof(VaultSettings)));
             services.Configure<SecretSettings>(Configuration.GetSection(nameof(SecretSettings)));
+
+            services.AddHealthChecks();
 
             IKeyVaultClient keyVaultClient;
             if (Env.IsProduction())
@@ -86,6 +89,17 @@ namespace secure_api
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
+
+            app.UseHealthChecks("/health/live", new HealthCheckOptions()
+            {
+                AllowCachingResponses = false,
+                Predicate = (check) => check.Tags.Contains("live")
+            });
+            app.UseHealthChecks("/health/ready", new HealthCheckOptions()
+            {
+                AllowCachingResponses = false,
+                Predicate = (check) => check.Tags.Contains("ready")
+            });
 
             app.UseHttpsRedirection();
             app.UseMvc();
